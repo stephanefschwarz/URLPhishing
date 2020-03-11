@@ -1,0 +1,5 @@
+URLPhishing.egg-info/*
+build/*
+dist/*
+src.egg-info/*
+data/*
