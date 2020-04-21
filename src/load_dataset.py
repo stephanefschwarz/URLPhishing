@@ -80,13 +80,14 @@ class Dataset:
 	@staticmethod
 	def to_save(to_save_object, file_path, process_name, type_):
 
-		with open(file_path, 'wt') as file: # file_path.pkl
+		if (type_ == 'data'):
 
-			if (type_ == 'data'):
-
+			with open(file_path, 'wt') as file: # file_path.pkl
 				json.dump(to_save_object, file)
-			
-			else:
+
+		else:
+
+			with open(file_path, 'wb') as file: # file_path.data
 
 				pickle.dump(to_save_object, file, pickle.HIGHEST_PROTOCOL)
 
