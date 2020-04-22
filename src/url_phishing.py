@@ -13,6 +13,10 @@ from load_dataset import Dataset
 import logging
 from logging.config import fileConfig
 
+logging.basicConfig(filename='phishing_log.app', filemode='a', level=logging.DEBUG, format='[%(asctime)s] - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger('phishing')
+
+
 class UrlPhish(nn.Module):
 
 	def __init__(self, vocab_size, embedding_dim,
@@ -82,7 +86,71 @@ class UrlPhish(nn.Module):
 # ============================================================================================
 	
 	@staticmethod
-	def train_model(**kwargs):		
+	def train_model(**kwargs):
+
+		# ======================================================
+
+		def training(model, iterator, optimizer, criterion):
+
+			epoch_loss = 0
+			epoch_acc = 0
+
+			model.train()
+
+			for labels, char, word in tqdm(iterator):
+
+				optimizer.zero_grad()
+
+				predictions = model(char, word)
+
+				loss = criterion(predictions, labels)
+
+				acc = categorical_accuracy(predictions, labels)
+				loss.backward()
+
+				optimizer.step()
+
+				epoch_acc = epoch_acc + acc.item()
+				epoch_loss = epoch_loss + loss.item()
+
+
+			return epoch_loss / len(iterator), epoch_acc / len(iterator)		
+
+		# ======================================================
+
+		def evaluate(model, iterator, criterion):
+
+			epoch_loss = 0
+			epoch_acc = 0
+
+			model.eval()
+
+			with torch.no_grad():
+
+				for labels, prems, hypos in tqdm(iterator):
+
+					predictions = model(prems, hypos)
+
+					loss = criterion(predictions, labels)
+
+					acc = categorical_accuracy(predictions, labels)
+
+					epoch_loss += loss.item()
+					epoch_acc += acc.item()
+
+			return epoch_loss / len(iterator), epoch_acc / len(iterator)
+
+		# ======================================================
+
+		def categorical_accuracy(preds, labels):
+
+			max_preds = preds.argmax(dim=-1) 
+
+			correct = max_preds.eq(labels)
+
+			return correct.sum() / torch.FloatTensor([labels.shape[0]])
+
+		# ======================================================
 
 		train_final_acc = []
 		train_final_loss = []
@@ -98,18 +166,16 @@ class UrlPhish(nn.Module):
 		dataset = kwargs['train_dataset']
 		val_dataset = kwargs['val_dataset']
 		field_pad_index = kwargs['field_pad_index']
+		val_iterator = None
 
 		collator = UrlPhishCollator(field_pad_index, device)
 
 		iterator = DataLoader(dataset, batch_size=batch_size,shuffle=True, collate_fn= collator.collate)
+			
 
 		if (val_dataset != None):
 
-			val_iterator = DataLoader(val_dataset, batch_size=batch_size,shuffle=True, collate_fn= collate.collate)
-
-		else:
-
-			val_iterator = None
+			val_iterator = DataLoader(val_dataset, batch_size=batch_size,shuffle=True, collate_fn= collator.collate)
 
 
 		optimizer = optim.Adam(model.parameters())
@@ -122,77 +188,36 @@ class UrlPhish(nn.Module):
 
 		for epoch in range(epochs):
 
-			epoch_acc = 0
-			epoch_loss = 0
+			train_loss, train_acc = training(model, iterator, optimizer, criterion)
 
-			for labels, char, word in tqdm(iterator):
+			logger.debug('Train Epoch %s \t --> \t acc: %s \t\t loss: %s', epoch, train_acc, train_loss)
 
-				optimizer.zero_grad()
-
-				predictions = model(char, word)
-
-				loss = criterion(predictions, labels)
-
-				acc = UrlPhish.categorical_accuracy(predictions, labels)
-
-				loss.backward()
-
-				optimizer.step()
-
-				epoch_acc = epoch_acc + acc.item()
-				epoch_loss = epoch_loss + loss.item()
-
-			train_final_loss.append(epoch_loss/len(iterator))
-			train_final_acc.append(epoch_acc/len(iterator))
-
-			print('Loss: ', train_final_loss, 'Acc: ', train_final_acc)
+			train_final_loss.append(train_loss)
+			train_final_acc.append(train_acc)
 
 			if(val_iterator != None):
+				
+				val_loss, val_acc = evaluate(model, val_iterator, criterion)
 
-				epoch_loss = 0
-				epoch_acc = 0
+				val_final_acc.append(val_loss)
+				val_final_loss.append(val_acc)
 
-				model.eval()
-
-				with torch.no_grad():
-
-					for labels, url_char, url_word in tqdm(val_iterator):
-					
-						predictions = model(url_char, url_word)
-
-						loss = criterion(predictions, labels)
-
-						acc = UrlPhish.categorical_accuracy(predictions, labels)
-
-						epoch_loss += loss.item()
-						epoch_acc += acc.item()
-
-					val_final_acc(epoch_loss / len(iterator))
-					val_final_loss(epoch_acc / len(iterator))
+				logger.debug('Test Epoch %s \t --> \t acc: %s \t\t loss: %s', epoch, val_acc, val_loss)
 
 
 		checkpoint = {
 					'epoch': epochs,
 					'model_state_dict': model.state_dict(),
-					'optimizer_state_dict': optimizer.state_dict(),
-					'loss': loss
+					'optimizer_state_dict': optimizer.state_dict()
+					# 'loss': loss
 					}
 
-		save_model(checkpoint, './model.pth.tar')
+		torch.save(checkpoint,'./model.pth.tar')
 
 
 		return (train_final_acc, train_final_loss, 
 			    val_final_acc, val_final_acc)
 
-
-	@staticmethod
-	def categorical_accuracy(preds, labels):
-
-		max_preds = preds.argmax(dim=-1) 
-
-		correct = max_preds.eq(labels)
-
-		return correct.sum() / torch.FloatTensor([labels.shape[0]])
 
 	@staticmethod
 	def infer(**kwargs):
@@ -206,8 +231,6 @@ class UrlPhish(nn.Module):
 		label_vocab = kwargs['label_vocab']
 
 		device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-		collator = UrlPhishCollator(field_pad_index, device)
-
 
 		model.eval()
 
@@ -228,12 +251,6 @@ class UrlPhish(nn.Module):
 		prediction = prediction.argmax(dim=-1).item()
 
 		return label_vocab.int_to_str[prediction]
-
-
-	@staticmethod
-	def save_model(checkpoint, model_path):
-
-		torch.save(checkpoint, model_path)
 
 
 	@staticmethod

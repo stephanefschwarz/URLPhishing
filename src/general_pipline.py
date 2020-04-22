@@ -13,28 +13,25 @@ def main():
 
 	token_char = Tokenize(lower=True, max_length=None, mode='char', ngram_size=1)
 	token_word = Tokenize(lower=True, max_length=None, mode='word', ngram_size=1)
-	print('tokenize ok')
+	
 	logger.info('Tokenize ok')
 	# -----------------------------------------------------------------------------------
 	field_tok = {'label':None, 'url_char':token_char.tokenize, 'url_word':token_word.tokenize}
 
-	#train_data = Dataset('./train.csv', field_tok)
+	# train_data = Dataset('./train.csv', field_tok)
 
-	#logger.info('Train data')
-	#print("TRAIN DATA \n")
+	# freq = Dataset.get_token_frequency(train_data)
+	# logger.info('Frequency')
+	# sen_freq = freq['url_char'] + freq['url_word']
 
-	#freq = Dataset.get_token_frequency(train_data)
-	#logger.info('Frequency')
-	#sen_freq = freq['url_char'] + freq['url_word']
+	# label_freq = freq['label']
 
-	#label_freq = freq['label']
+	# logger.info('Label')
 
-	#logger.info('Label')
+	# sen_vocab = Vocab(sen_freq)
 
-	#sen_vocab = Vocab(sen_freq)
-
-	logger.info('Loading sen_vocab')
 	try:
+		logger.info('Loading sen_vocab')
 		#Dataset.to_save(sen_vocab, './sen_vocab.pkl', 'sen_vocab', 'pickle')
 		sen_vocab = Dataset.load_file_saved('./sen_vocab.pkl', './sen_vocab.pkl', 'pickle')
 
@@ -44,10 +41,6 @@ def main():
 		logger.info(e)
 		exit()
 
-	#print('Sent. Vocab.: ', sen_vocab)
-	#print('Sent. type.: ', type(sen_vocab))
-
-	#label_vocab = Vocab(label_freq, unk_token=None, pad_token=None)
 	try:
 		logger.info('Loading label vocabulary')
 		#Dataset.to_save(label_vocab, './label_vocab.pkl', 'label_vocab', 'pickle')
@@ -59,11 +52,8 @@ def main():
 
 	# -----------------------------------------------------------------------------------
 
-	#sen_vocab = Dataset.load_file_saved('./sen_vocab.pkl', 'sen_vocab', 'pickle')
-	#print('Sent. Vocab.: ', sen_vocab)
-
-	#label_vocab = Dataset.load_file_saved('data/label_vocab.pkl', 'label_vocab', 'pickle')
 	logging.info('Loaded files.')
+
 	tokenizer = {
 				'url_char': token_char.tokenize,
 				'url_word': token_word.tokenize, 
@@ -76,26 +66,23 @@ def main():
 					'label':label_vocab.numericalize
 					}
 
-	logger.info('Tokenizing train set')
-	#train = Dataset('./train.csv', tokenizers=tokenizer, numericalizers=numericalize)
+	# train = Dataset('./train.csv', tokenizers=tokenizer, numericalizers=numericalize)
 	#logger.info('Saiving tekenized train set')
 	#Dataset.to_save(train.data, './train_map.data', 'train map', 'data')
+
+	logger.info('loading tokenized train set')
 	train = Dataset.load_file_saved('./train_map.data', 'train map', 'data')
 
-	logger.info('Tokenizing val set')
+	logger.info('loading val tokenized set')
 	val = Dataset.load_file_saved('./val_map.data', 'val map', 'data')
 
 
-	#val = Dataset('./val.csv', tokenizers=tokenizer, numericalizers=numericalize)
+	# val = Dataset('./val.csv', tokenizers=tokenizer, numericalizers=numericalize)
 	#logger.info('Saving tokenized val set')
 	#Dataset.to_save(val.data, './val_map.data', 'val map', 'data')
 	
 	#test = Dataset('./test.csv', tokenizers=tokenizer, numericalizers=numericalize)
 	#Dataset.to_save(test.data, './test_map.data', 'test map', 'data')
-
-	#train = Dataset.load_file_saved('data/train_map.data', 'train load', 'data')
-	#val = Dataset.load_file_saved('data/val_map.data', 'val load', 'data')
-	#test = Dataset.load_file_saved('data/test_map.data', 'test load', 'data')
 
 	field_pad_index = {
 						'url_char': sen_vocab[sen_vocab.pad_token],
@@ -104,22 +91,8 @@ def main():
 						}
 
 
-	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-	logging.debug('Device: %s', device)
-
-	print('\nWe will use the ', device, 'device. \n')
-
-	collator = UrlPhishCollator(field_pad_index, device)
-
-	batch = 128
-	logger.info('Setup data loaders')
-	train_loader = DataLoader(train, batch_size=batch, shuffle=True, collate_fn=collator.collate)
-	val_loader = DataLoader(val, batch_size=batch, shuffle=True, collate_fn=collator.collate)
-	#test_loader = DataLoader(test, batch_size=batch, shuffle=True, collate_fn=collator.collate)
-
 	input_dim = len(sen_vocab)
 	# input_dim_word = len(word_vocab)
-
 
 	embedding_dim = 100
 	hidden_dim = 300
@@ -131,8 +104,6 @@ def main():
 	pad_idx = sen_vocab[sen_vocab.pad_token]
 	epochs = 3
 	batch_size = 128
-
-	collete = collator
 
 	model = UrlPhish(input_dim,
 					 embedding_dim, hidden_dim, 
@@ -149,7 +120,7 @@ def main():
 			 'field_pad_index':field_pad_index
 			 }
 
-	acc, loss = UrlPhish.train_model(**kwargs)
+	train_final_acc, train_final_loss, val_final_acc, val_final_acc = UrlPhish.train_model(**kwargs)
 
 	url_char = 'https://w1.smsaapf.com/'
 	url_word = 'https://w1.smsaapf.com/'
@@ -158,9 +129,9 @@ def main():
 	'model' : model,
 	'url_char' : url_char,
 	'url_word' : url_word,
-	'char_tokenizer': char_tokenizer,
-	'word_tokenizer': word_tokenizer,
-	'sentence_numericalizer': sentence_numericalizer,
+	'char_tokenizer': token_char.tokenize,
+	'word_tokenizer': token_word.tokenize,
+	'sentence_numericalizer': sen_vocab.numericalize,
 	'label_vocab': label_vocab
 	}
 	
@@ -173,7 +144,7 @@ def main():
 
 	print('Saving model...')
 
-	torch.save(model.state_dict(), './modeloEsse')
+	torch.save(model.state_dict(), './modelStateDict.pt')
 
 	
 
