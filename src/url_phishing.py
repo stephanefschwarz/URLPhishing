@@ -253,20 +253,38 @@ class UrlPhish(nn.Module):
 		return label_vocab.int_to_str[prediction]
 
 
+#	@staticmethod
+#	def load_model(model, optimizer, model_path):
+#
+#		checkpoint = torch.load(model_path)
+#
+#		model.load_state_dict(checkpoint['model_state_dict'])
+#
+#		optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+#
+#		epoch = checkpoint['epoch']
+#
+#		loss = checkpoint['loss']
+#
+#		return (model, optimizer, epoch, loss)
+
 	@staticmethod
-	def load_model(model, optimizer, model_path):
+	def load_model(model, 
+		# optimizer, 
+		model_path):
 
 		checkpoint = torch.load(model_path)
 
 		model.load_state_dict(checkpoint['model_state_dict'])
 
-		optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+		# optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-		epoch = checkpoint['epoch']
+		# epoch = checkpoint['epoch']
 
-		loss = checkpoint['loss']
+		# loss = checkpoint['loss']
 
-		return (model, optimizer, epoch, loss)
+		# return (model, optimizer, epoch, loss)
+		return model
 
 # ============================================================================================ #
 # ============================================================================================ #

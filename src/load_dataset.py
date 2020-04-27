@@ -82,12 +82,12 @@ class Dataset:
 
 		if (type_ == 'data'):
 
-			with open(file_path, 'wt') as file: # file_path.pkl
+			with open(file_path, 'wt') as file: # file_path.data
 				json.dump(to_save_object, file)
 
 		else:
 
-			with open(file_path, 'wb') as file: # file_path.data
+			with open(file_path, 'wb') as file: # file_path.pkl
 
 				pickle.dump(to_save_object, file, pickle.HIGHEST_PROTOCOL)
 

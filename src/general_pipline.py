@@ -19,21 +19,22 @@ def main():
 	field_tok = {'label':None, 'url_char':token_char.tokenize, 'url_word':token_word.tokenize}
 
 	# train_data = Dataset('./train.csv', field_tok)
+	train_data = Dataset('new_train.csv', field_tok)
 
-	# freq = Dataset.get_token_frequency(train_data)
-	# logger.info('Frequency')
-	# sen_freq = freq['url_char'] + freq['url_word']
+	freq = Dataset.get_token_frequency(train_data)
+	logger.info('Frequency')
+	sen_freq = freq['url_char'] + freq['url_word']
 
-	# label_freq = freq['label']
+	label_freq = freq['label']
 
 	# logger.info('Label')
 
-	# sen_vocab = Vocab(sen_freq)
-
+	sen_vocab = Vocab(sen_freq)
+	label_vocab = Vocab(label_freq, unk_token=None, pad_token=None)
 	try:
 		logger.info('Loading sen_vocab')
-		#Dataset.to_save(sen_vocab, './sen_vocab.pkl', 'sen_vocab', 'pickle')
-		sen_vocab = Dataset.load_file_saved('./sen_vocab.pkl', './sen_vocab.pkl', 'pickle')
+		Dataset.to_save(sen_vocab, './sen_vocab.pkl', 'sen_vocab', 'pickle')
+		#sen_vocab = Dataset.load_file_saved('./sen_vocab.pkl', './sen_vocab.pkl', 'pickle')
 
 	except Exception as e:
 
@@ -43,8 +44,8 @@ def main():
 
 	try:
 		logger.info('Loading label vocabulary')
-		#Dataset.to_save(label_vocab, './label_vocab.pkl', 'label_vocab', 'pickle')
-		label_vocab = Dataset.load_file_saved('./label_vocab.pkl', './label_vocab.pkl', 'pickle')
+		Dataset.to_save(label_vocab, './label_vocab.pkl', 'label_vocab', 'pickle')
+		#label_vocab = Dataset.load_file_saved('./label_vocab.pkl', './label_vocab.pkl', 'pickle')
 
 	except:
 		logger.info('Error on saving label_vocab.pkl')
@@ -66,21 +67,21 @@ def main():
 					'label':label_vocab.numericalize
 					}
 
-	# train = Dataset('./train.csv', tokenizers=tokenizer, numericalizers=numericalize)
-	#logger.info('Saiving tekenized train set')
-	#Dataset.to_save(train.data, './train_map.data', 'train map', 'data')
+	train = Dataset('./new_train.csv', tokenizers=tokenizer, numericalizers=numericalize)
+	logger.info('Saiving tekenized train set')
+	Dataset.to_save(train.data, './train_map.data', 'train map', 'data')
 
-	logger.info('loading tokenized train set')
-	train = Dataset.load_file_saved('./train_map.data', 'train map', 'data')
+	#logger.info('loading tokenized train set')
+	#train = Dataset.load_file_saved('./train_map.data', 'train map', 'data')
 
-	logger.info('loading val tokenized set')
-	val = Dataset.load_file_saved('./val_map.data', 'val map', 'data')
+	#logger.info('loading val tokenized set')
+	#val = Dataset.load_file_saved('./val_map.data', 'val map', 'data')
 
 
-	# val = Dataset('./val.csv', tokenizers=tokenizer, numericalizers=numericalize)
-	#logger.info('Saving tokenized val set')
-	#Dataset.to_save(val.data, './val_map.data', 'val map', 'data')
-	
+	val = Dataset('./new_val.csv', tokenizers=tokenizer, numericalizers=numericalize)
+	logger.info('Saving tokenized val set')
+	Dataset.to_save(val.data, './val_map.data', 'val map', 'data')
+
 	#test = Dataset('./test.csv', tokenizers=tokenizer, numericalizers=numericalize)
 	#Dataset.to_save(test.data, './test_map.data', 'test map', 'data')
 
@@ -102,7 +103,7 @@ def main():
 	output_dim = len(label_vocab)
 	dropout = 0.2
 	pad_idx = sen_vocab[sen_vocab.pad_token]
-	epochs = 3
+	epochs = 15
 	batch_size = 128
 
 	model = UrlPhish(input_dim,
@@ -122,8 +123,8 @@ def main():
 
 	train_final_acc, train_final_loss, val_final_acc, val_final_acc = UrlPhish.train_model(**kwargs)
 
-	url_char = 'https://w1.smsaapf.com/'
-	url_word = 'https://w1.smsaapf.com/'
+	url_char = ' https://ifood.mobi/sms'
+	url_word = ' https://ifood.mobi/sms'
 
 	kwargs = {
 	'model' : model,
