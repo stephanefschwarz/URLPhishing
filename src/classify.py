@@ -3,6 +3,7 @@ from load_dataset import Dataset
 from feature_maping import Tokenize, Vocab
 from url_phishing import UrlPhish, UrlPhishCollator
 import argparse
+import os.path
 
 from torch.utils.data import DataLoader
 import torch
@@ -39,7 +40,7 @@ def command_line_parsing():
 						help='Path for the sen_vocab.pkl file.')
 	
 	parser.add_argument('--label_vocab', '-l',
-						dest='lebal_vocab_path',
+						dest='label_vocab_path',
 						required=True,
 						help='Path for the label_vocab.pkl file.')
 	
@@ -61,7 +62,7 @@ def main():
 
 	sen_vocab = Dataset.load_file_saved(args.sen_vocab_path, './sen_vocab.pkl', 'pickle')
 
-	label_vocab = Dataset.load_file_saved(args.lebal_vocab_path, './label_vocab.pkl', 'pickle')
+	label_vocab = Dataset.load_file_saved(args.label_vocab_path, './label_vocab.pkl', 'pickle')
 
 	input_dim = len(sen_vocab)
 	embedding_dim = 100
@@ -98,6 +99,21 @@ def main():
 
 
 	answer = UrlPhish.infer(**kwargs)
+
+	if os.path.exists(args.report_path) == False:
+
+		file = open(args.report_path, 'a')
+
+		file.write('url,predicted_label\n')
+
+	else:
+
+		file = open(args.report_path, 'a')
+
+	file.write('{},{}\n'.format(args.url, answer))
+	file.close()
+
+
 
 	print('The ', args.url, ' URL is ', answer)
 
