@@ -7,14 +7,13 @@ from torch.nn.utils.rnn import pad_sequence
 
 import pandas as pd
 from tqdm import tqdm
+from sklearn.metrics import f1_score, precision_score
 
 from load_dataset import Dataset
 
 import logging
 from logging.config import fileConfig
 
-logging.basicConfig(filename='phishing_log.app', filemode='a', level=logging.DEBUG, format='[%(asctime)s] - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger('phishing')
 
 
 class UrlPhish(nn.Module):
@@ -22,10 +21,13 @@ class UrlPhish(nn.Module):
 	def __init__(self, vocab_size, embedding_dim,
 				 hidden_dim, n_lstm_layers, bidirectional,
 				 n_fc_layers, output_dim,
-				 dropout, pad_idx
+				 dropout, pad_idx, log
 				 ):
 
 		super().__init__()
+
+		logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG, format='[%(asctime)s] - %(name)s - %(levelname)s - %(message)s')
+		logger = logging.getLogger('UrlPhish Init')
 
 		self.embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embedding_dim, 
 																	padding_idx=pad_idx)
@@ -95,6 +97,9 @@ class UrlPhish(nn.Module):
 			epoch_loss = 0
 			epoch_acc = 0
 
+			labs = []
+			preds = []
+
 			model.train()
 
 			for labels, char, word in tqdm(iterator):
@@ -105,6 +110,9 @@ class UrlPhish(nn.Module):
 
 				loss = criterion(predictions, labels)
 
+				labs.extend(labels.cpu().numpy())
+				preds.extend(predictions.argmax(dim=-1).cpu().numpy())
+
 				acc = categorical_accuracy(predictions, labels)
 				loss.backward()
 
@@ -113,8 +121,7 @@ class UrlPhish(nn.Module):
 				epoch_acc = epoch_acc + acc.item()
 				epoch_loss = epoch_loss + loss.item()
 
-
-			return epoch_loss / len(iterator), epoch_acc / len(iterator)		
+			return epoch_loss / len(iterator), epoch_acc / len(iterator), f1_score(labs, preds, average='micro'), precision_score(labs, preds, average='micro')
 
 		# ======================================================
 
@@ -122,6 +129,9 @@ class UrlPhish(nn.Module):
 
 			epoch_loss = 0
 			epoch_acc = 0
+
+			labs = []
+			preds = []
 
 			model.eval()
 
@@ -133,12 +143,16 @@ class UrlPhish(nn.Module):
 
 					loss = criterion(predictions, labels)
 
+					labs.extend(labels.cpu().numpy())
+					preds.extend(predictions.argmax(dim=-1).cpu().numpy())
+
 					acc = categorical_accuracy(predictions, labels)
 
 					epoch_loss += loss.item()
 					epoch_acc += acc.item()
 
-			return epoch_loss / len(iterator), epoch_acc / len(iterator)
+
+			return epoch_loss / len(iterator), epoch_acc / len(iterator), f1_score(labs, preds, average='micro'), precision_score(labs, preds, average='micro')
 
 		# ======================================================
 
@@ -151,6 +165,9 @@ class UrlPhish(nn.Module):
 			return correct.sum() / torch.FloatTensor([labels.shape[0]])
 
 		# ======================================================
+
+		logging.basicConfig(filename=kwargs['log'], filemode='a', level=logging.DEBUG, format='[%(asctime)s] - %(name)s - %(levelname)s - %(message)s')
+		logger = logging.getLogger('UrlPhish Init')
 
 		train_final_acc = []
 		train_final_loss = []
@@ -166,6 +183,7 @@ class UrlPhish(nn.Module):
 		dataset = kwargs['train_dataset']
 		val_dataset = kwargs['val_dataset']
 		field_pad_index = kwargs['field_pad_index']
+		model_path_name = kwargs['model_path_name']
 		val_iterator = None
 
 		collator = UrlPhishCollator(field_pad_index, device)
@@ -188,21 +206,22 @@ class UrlPhish(nn.Module):
 
 		for epoch in range(epochs):
 
-			train_loss, train_acc = training(model, iterator, optimizer, criterion)
+			train_loss, train_acc, train_f1, train_prec = training(model, iterator, optimizer, criterion)
 
-			logger.debug('Train Epoch %s \t --> \t acc: %s \t\t loss: %s', epoch, train_acc, train_loss)
+			# logger.debug('Train Epoch %s \t --> \t acc: %s \t\t loss: %s', epoch, train_acc, train_loss)
+			logger.debug('Train Epoch {} --> acc: {:.4f} \t loss: {:.4f} \t f1: {:.4f} \t prec: {:.4f}'.format(epoch, train_acc, train_loss, train_f1, train_prec))
 
 			train_final_loss.append(train_loss)
 			train_final_acc.append(train_acc)
 
 			if(val_iterator != None):
 				
-				val_loss, val_acc = evaluate(model, val_iterator, criterion)
+				val_loss, val_acc, val_f1, val_prec = evaluate(model, val_iterator, criterion)
 
 				val_final_acc.append(val_loss)
 				val_final_loss.append(val_acc)
 
-				logger.debug('Test Epoch %s \t --> \t acc: %s \t\t loss: %s', epoch, val_acc, val_loss)
+				logger.debug('Test Epoch {} --> acc: {:.4f} \t loss: {:.4f} \t f1: {:.4f} \t prec: {:.4f}'.format(epoch, val_acc, val_loss, val_f1, val_prec))
 
 
 		checkpoint = {
@@ -212,7 +231,8 @@ class UrlPhish(nn.Module):
 					# 'loss': loss
 					}
 
-		torch.save(checkpoint,'./model.pth.tar')
+		torch.save(checkpoint, model_path_name)
+		# torch.save(checkpoint,'./model.pth.tar')
 
 
 		return (train_final_acc, train_final_loss, 
@@ -228,7 +248,7 @@ class UrlPhish(nn.Module):
 		char_tokenizer = kwargs['char_tokenizer']
 		word_tokenizer = kwargs['word_tokenizer']
 		sentence_numericalizer = kwargs['sentence_numericalizer']
-		label_vocab = kwargs['label_vocab']
+		vocab_label = kwargs['vocab_label']
 
 		device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -250,23 +270,8 @@ class UrlPhish(nn.Module):
 
 		prediction = prediction.argmax(dim=-1).item()
 
-		return label_vocab.int_to_str[prediction]
+		return vocab_label.int_to_str[prediction]
 
-
-#	@staticmethod
-#	def load_model(model, optimizer, model_path):
-#
-#		checkpoint = torch.load(model_path)
-#
-#		model.load_state_dict(checkpoint['model_state_dict'])
-#
-#		optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-#
-#		epoch = checkpoint['epoch']
-#
-#		loss = checkpoint['loss']
-#
-#		return (model, optimizer, epoch, loss)
 
 	@staticmethod
 	def load_model(model, 
