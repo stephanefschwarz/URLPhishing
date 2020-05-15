@@ -5,55 +5,112 @@ from url_phishing import UrlPhish, UrlPhishCollator
 
 from torch.utils.data import DataLoader
 import torch
+import argparse
+
+def command_line_parsing():
+	"""Parse command lines
+		Parameters
+		----------
+		model_path : str
+			path to the train dataset
+		model : URLPhish
+			path to the train dataset
+		Returns
+		-------
+		parser
+			The arguments from command line
+	"""
+	parser = argparse.ArgumentParser(description = __doc__)
+
+	parser.add_argument('--phishing_log', '-l',
+						dest='log',
+						required=True,
+						help='log file name')
+
+	parser.add_argument('--save_files', '-s',
+						dest='use_saved',
+						required=True,
+						help='if save (True) or not (False) the generated files')
+
+	parser.add_argument('--training_set', '-t',
+						dest='training_set',
+						required=False,
+						help='Training set path')
+
+	parser.add_argument('--testing_set', '-v',
+						dest='validation_set',
+						required=False,
+						help='Validation set path')
+
+	parser.add_argument('--model_path_name', '-m',
+						dest='model_path_name',
+						required=True,
+						help='model path name')
+
+
+	return parser.parse_args()
 
 def main():
 
-	logging.basicConfig(filename='phishing_log.app', filemode='a', level=logging.DEBUG, format='[%(asctime)s] - %(name)s - %(levelname)s - %(message)s')
+	args = command_line_parsing()
+
+	logging.basicConfig(filename=args.log, filemode='a', level=logging.DEBUG, format='[%(asctime)s] - %(name)s - %(levelname)s - %(message)s')
 	logger = logging.getLogger('phishing')
+
+	logger.info('Tokenizing...')
 
 	token_char = Tokenize(lower=True, max_length=None, mode='char', ngram_size=1)
 	token_word = Tokenize(lower=True, max_length=None, mode='word', ngram_size=1)
 	
-	logger.info('Tokenize ok')
+
 	# -----------------------------------------------------------------------------------
 	field_tok = {'label':None, 'url_char':token_char.tokenize, 'url_word':token_word.tokenize}
 
-	# train_data = Dataset('./train.csv', field_tok)
-	train_data = Dataset('new_train.csv', field_tok)
+	if (args.use_saved == False):
 
-	freq = Dataset.get_token_frequency(train_data)
-	logger.info('Frequency')
-	sen_freq = freq['url_char'] + freq['url_word']
+		# train_data = Dataset('./train.csv' or new_train.csv, field_tok)
+		train_data = Dataset(args.training_set, field_tok)
+		freq = Dataset.get_token_frequency(train_data)
 
-	label_freq = freq['label']
+		sen_freq = freq['url_char'] + freq['url_word']
+		label_freq = freq['label']
 
-	# logger.info('Label')
+		logger.info('Building vocabulary...')
 
-	sen_vocab = Vocab(sen_freq)
-	label_vocab = Vocab(label_freq, unk_token=None, pad_token=None)
-	try:
-		logger.info('Loading sen_vocab')
-		Dataset.to_save(sen_vocab, './sen_vocab.pkl', 'sen_vocab', 'pickle')
-		#sen_vocab = Dataset.load_file_saved('./sen_vocab.pkl', './sen_vocab.pkl', 'pickle')
+		vocab_sen = Vocab(sen_freq)
+		vocab_label = Vocab(label_freq, unk_token=None, pad_token=None)
 
-	except Exception as e:
+		try:
 
-		logger.info('Error on saving sen_vocab.pkl')
-		logger.info(e)
-		exit()
+			logger.info('Saving vocab_sen and vocab_label')
 
-	try:
-		logger.info('Loading label vocabulary')
-		Dataset.to_save(label_vocab, './label_vocab.pkl', 'label_vocab', 'pickle')
-		#label_vocab = Dataset.load_file_saved('./label_vocab.pkl', './label_vocab.pkl', 'pickle')
+			Dataset.to_save(vocab_sen, './vocab_sen.pkl', 'vocab_sen', 'pickle')
+			Dataset.to_save(vocab_label, './vocab_label.pkl', 'vocab_label', 'pickle')
 
-	except:
-		logger.info('Error on saving label_vocab.pkl')
-		exit()
+		except Exception as e:
+
+			logger.error('Error on saving vocab_sen.pkl or vocab_label.pkl')
+			logger.error(e)
+			
+			exit()
+
+	else: 
+
+		try:
+
+			logger.info('Loading vocab_sen and vocab_label')
+
+			vocab_sen = Dataset.load_file_saved('./vocab_sen.pkl', './vocab_sen.pkl', 'pickle')
+			vocab_label = Dataset.load_file_saved('./vocab_label.pkl', './vocab_label.pkl', 'pickle')
+
+		except Exception as e:
+
+			logger.error('Error on saving vocab_sen.pkl or vocab_label.pkl')
+			logger.error(e)
+
+			exit()
 
 	# -----------------------------------------------------------------------------------
-
-	logging.info('Loaded files.')
 
 	tokenizer = {
 				'url_char': token_char.tokenize,
@@ -62,37 +119,52 @@ def main():
 				}
 
 	numericalize = {
-					'url_char': sen_vocab.numericalize,
-					'url_word': sen_vocab.numericalize, 
-					'label':label_vocab.numericalize
+					'url_char': vocab_sen.numericalize,
+					'url_word': vocab_sen.numericalize, 
+					'label':vocab_label.numericalize
 					}
 
-	train = Dataset('./new_train.csv', tokenizers=tokenizer, numericalizers=numericalize)
-	logger.info('Saiving tekenized train set')
-	Dataset.to_save(train.data, './train_map.data', 'train map', 'data')
 
-	#logger.info('loading tokenized train set')
-	#train = Dataset.load_file_saved('./train_map.data', 'train map', 'data')
+	if (args.use_saved == False):
 
-	#logger.info('loading val tokenized set')
-	#val = Dataset.load_file_saved('./val_map.data', 'val map', 'data')
+		train = Dataset(args.training_set, tokenizers=tokenizer, numericalizers=numericalize)
+		val = Dataset(args.validation_set, tokenizers=tokenizer, numericalizers=numericalize)
 
+		try:
 
-	val = Dataset('./new_val.csv', tokenizers=tokenizer, numericalizers=numericalize)
-	logger.info('Saving tokenized val set')
-	Dataset.to_save(val.data, './val_map.data', 'val map', 'data')
+			logger.info('Saiving training and validation mapping')
 
-	#test = Dataset('./test.csv', tokenizers=tokenizer, numericalizers=numericalize)
-	#Dataset.to_save(test.data, './test_map.data', 'test map', 'data')
+			Dataset.to_save(train.data, './map_train.data', 'train map', 'data')
+			Dataset.to_save(val.data, './map_val.data', 'val map', 'data')
+
+		except Exception as e:
+
+			logger.error('Error on saving mapping files')
+			logger.error(e)
+
+	else:
+
+		try:
+
+			logger.info('Loading training and validation mapping')
+
+			train = Dataset.load_file_saved('./map_train.data', 'train map', 'data')
+			val = Dataset.load_file_saved('./map_val.data', 'val map', 'data')
+
+		except Exception as e:
+
+			logger.error('Error on loading mapping files')
+			logger.error(e)
+
 
 	field_pad_index = {
-						'url_char': sen_vocab[sen_vocab.pad_token],
-						'url_word': sen_vocab[sen_vocab.pad_token], 
-						'label':label_vocab[label_vocab.pad_token]
+						'url_char': vocab_sen[vocab_sen.pad_token],
+						'url_word': vocab_sen[vocab_sen.pad_token], 
+						'label':vocab_label[vocab_label.pad_token]
 						}
 
 
-	input_dim = len(sen_vocab)
+	input_dim = len(vocab_sen)
 	# input_dim_word = len(word_vocab)
 
 	embedding_dim = 100
@@ -100,9 +172,9 @@ def main():
 	n_lstm_layers = 1
 	bidirectional = True
 	n_fc_layers = 3
-	output_dim = len(label_vocab)
+	output_dim = len(vocab_label)
 	dropout = 0.2
-	pad_idx = sen_vocab[sen_vocab.pad_token]
+	pad_idx = vocab_sen[vocab_sen.pad_token]
 	epochs = 15
 	batch_size = 128
 
@@ -110,7 +182,7 @@ def main():
 					 embedding_dim, hidden_dim, 
 					 n_lstm_layers, bidirectional,
 					 n_fc_layers, output_dim,
-					 dropout, pad_idx)
+					 dropout, pad_idx, args.log)
 
 	kwargs = {'model':model,
 			 'epochs':epochs,
@@ -118,7 +190,9 @@ def main():
 			 'train_dataset':train,
 			 'val_dataset':val,
 			 #'val_dataset':None,
-			 'field_pad_index':field_pad_index
+			 'field_pad_index':field_pad_index,
+			 'log' : args.log,
+			 'model_path_name':args.model_path_name
 			 }
 
 	train_final_acc, train_final_loss, val_final_acc, val_final_acc = UrlPhish.train_model(**kwargs)
@@ -132,8 +206,9 @@ def main():
 	'url_word' : url_word,
 	'char_tokenizer': token_char.tokenize,
 	'word_tokenizer': token_word.tokenize,
-	'sentence_numericalizer': sen_vocab.numericalize,
-	'label_vocab': label_vocab
+	'sentence_numericalizer': vocab_sen.numericalize,
+	'vocab_label': vocab_label,
+	'log' : args.log
 	}
 	
 	answer = UrlPhish.infer(**kwargs)
@@ -142,10 +217,6 @@ def main():
 	print('Inference for ', url_word, ' was: ', answer)
 
 	logger.debug('Inference for %s is %s', url_word, answer)
-
-	print('Saving model...')
-
-	torch.save(model.state_dict(), './modelStateDict.pt')
 
 	
 
