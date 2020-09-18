@@ -1,0 +1,31 @@
+FROM tensorflow/tensorflow:latest-gpu-py3
+
+RUN apt-get update
+RUN apt install nano
+RUN apt-get install -y git
+RUN apt-get install -y wget
+
+RUN apt install whois
+RUN apt install netbase
+
+RUN apt-get clean
+RUN rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+ENV PATH=/opt/conda/bin:${PATH}
+
+RUN wget --quiet https://repo.anaconda.com/miniconda/https://repo.anaconda.com/miniconda/Miniconda-3.6.0-Linux-x86_64.sh \
+&& /bin/bash /Miniconda3-latest-Linux-x86_64.sh -b -p /opt/conda \
+&& rm Miniconda3-latest-Linux-x86_64.sh
+
+RUN conda install pytorch torchvision cudatoolkit=10.2 -c pytorch
+
+RUN pip3 install --upgrade pip
+RUN pip3 install pandas
+RUN pip3 install numpy
+RUN pip3 install tldextract
+RUN pip3 install tqdm
+
+RUN pip3 install scikit-learn
+RUN pip3 install matplotlib
+RUN pip3 install seaborn
+
